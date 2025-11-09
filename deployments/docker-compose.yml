@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with PostGIS
+  db:
+    image: postgis/postgis:15-3.4
+    environment:
+      POSTGRES_DB: municipal_waste
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your_secure_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: ./backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://postgres:your_secure_password@db:5432/municipal_waste
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+
+  # Frontend
+  frontend:
+    build: ./frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./deployments/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deployments/nginx/conf.d:/etc/nginx/conf.d:ro
+    ports:
+      - "443:443"
+    depends_on:
+      - frontend
+      - backend
+
+volumes:
+  postgres_data:
